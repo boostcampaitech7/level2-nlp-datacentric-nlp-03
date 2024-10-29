@@ -8,13 +8,13 @@ OUTPUT_DIR = os.path.join(BASE_DIR, '../output')
 data = pd.read_csv(os.path.join(DATA_DIR, 'train.csv'))
 
 label_mapping = {
-    0: '정치',
-    1: '경제',
-    2: '사회',
-    3: '생활문화',
-    4: '세계',
-    5: 'IT과학',
-    6: '스포츠'
+    0: '생활문화',
+    1: '스포츠',
+    2: '정치',
+    3: '사회',
+    4: 'IT과학',
+    5: '경제',
+    6: '세계',
 }
 
 data['label'] = data['target'].map(label_mapping)
