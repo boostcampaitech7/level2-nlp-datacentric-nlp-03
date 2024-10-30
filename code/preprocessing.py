@@ -62,23 +62,23 @@ You are required to return the corrected sentence in JSON format. Ensure your re
 Examples:
 
 Input:
-Original: "주제: 경제, 내용: 금U시R 충격 일단 소R국면… 주Z 낙폭 줄고 환A도 하M"
+Original: "topic: 경제, sentence: 금U시R 충격 일단 소R국면… 주Z 낙폭 줄고 환A도 하M"
 Output:
-{{"label": "경제", "corrected_text": "금융시장 충격 일단 소강국면…주가 낙폭 줄고 환율도 하락"}}
+{{"topic": "경제", "corrected_text": "금융시장 충격 일단 소강국면…주가 낙폭 줄고 환율도 하락"}}
 
 Input:
-Original: "주제: IT과학, 내용: SKT#유@콘시스템 5G 드#론용 I!CT 소*루션 개+발 협9력"
+Original: "topic: IT과학, sentence: SKT#유@콘시스템 5G 드#론용 I!CT 소*루션 개+발 협9력"
 Output:
-{{"label": "IT과학", "corrected_text": "SKT유콘시스템 5G 드론용 ICT 솔루션 개발 협력"}}
+{{"topic": "IT과학", "corrected_text": "SKT유콘시스템 5G 드론용 ICT 솔루션 개발 협력"}}
 
 Input:
-Original: "주제: 사회, 내용: 예스24 우D가 S$랑한 24!인의 J@가들 Z산서 T시"
+Original: "topic: 사회, sentence: 예스24 우D가 S$랑한 24!인의 J@가들 Z산서 T시"
 Output:
-{{"label": "사회", "corrected_text": "예스24 우리가 사랑한 24인의 작가들 부산서 전시"}}
+{{"topic": "사회", "corrected_text": "예스24 우리가 사랑한 24인의 작가들 부산서 전시"}}
 
-Now, provide the corrected text for the following input in the same JSON format:
+Now, understand the meaning of the sentences and correctly create sentence that fit the topic. generate the corrected text for the following input in the same JSON format:
 Input:
-Original: "주제: {label}, 내용: {noisy_sentence}"
+Original: "topic: {label}, sentence: {noisy_sentence}"
 Output:
 """
     
@@ -87,7 +87,6 @@ Output:
     corrected_sentence = tokenizer.decode(outputs[0], skip_special_tokens=True)
     # Extract the corrected sentence only, removing additional information
     corrected_sentence = extract_corrected_text(corrected_sentence)
-    # corrected_sentence = corrected_sentence.split("Corrected:")[-1].split("\n")[0].strip()
     return corrected_sentence
 
 # Apply the cleaning function to your data
