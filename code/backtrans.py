@@ -24,7 +24,7 @@ def back_translate(text, src='ko', mid='en'):
         return text
 
 # 'processed_text' 열에 백번역 적용
-df['back_translated_text'] = df['processed_text'].apply(lambda x: back_translate(str(x)))
+df['back_translated_text'] = df['clean_text'].apply(lambda x: back_translate(str(x)))
 
 # 결과를 새로운 CSV 파일로 저장
 df.to_csv(os.path.join(OUTPUT_DIR, "back_translated_data.csv"), index=False)

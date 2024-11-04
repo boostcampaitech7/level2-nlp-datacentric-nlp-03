@@ -52,7 +52,6 @@ output_path = os.path.join(OUTPUT_DIR, output_file)
 
 # 출력 디렉토리 생성 (존재하지 않으면)
 os.makedirs(OUTPUT_DIR, exist_ok=True)
-logging.info(f"출력 디렉토리 '{OUTPUT_DIR}'가 생성되었거나 이미 존재합니다.")
 
 # 데이터 유효성 검사: 'text' 열이 존재하는지 확인
 try:
@@ -70,24 +69,18 @@ except Exception as e:
 
 # 'text' 열의 NaN 값을 빈 문자열로 대체 (선택 사항)
 df['text'] = df['text'].fillna('')
-logging.info("텍스트 열의 NaN 값을 빈 문자열로 대체했습니다.")
 
 # 'text' 열의 앞뒤 공백 제거 (선택 사항)
 df['text'] = df['text'].str.strip()
-logging.info("텍스트의 앞뒤 공백을 제거했습니다.")
 
 # 'text' 열에서 '...'을 '…'으로 대체
 df['text'] = df['text'].apply(replace_ellipsis)
-logging.info("'...'을 '…'으로 대체했습니다.")
 
 # 정규 표현식 패턴 정의
-# (?<![A-Z])[A-Z](?![A-Z]): 단일 대문자 A-Z
-# [^ㄱ-ㅎ가-힣\u4E00-\u9FFF0-9\sA-Z\u2026]: 한글, 한자, 숫자, 공백, 대문자 A-Z, '…' 제외한 모든 문자
 pattern = r'(?<![A-Z])[A-Z](?![A-Z])|[^ㄱ-ㅎ가-힣\u4E00-\u9FFF0-9\sA-Z\u2026·∼]'
 
 # 'rmkor' 열에 패턴에 매칭되는 문자들만 추출
 df['rmkor'] = df['text'].apply(lambda x: extract_non_korean_chars(x, pattern))
-logging.info("정규 표현식 패턴에 매칭되는 문자들만 'rmkor' 열에 저장했습니다.")
 
 # 벡터화된 방법으로 한국어가 아닌 문자 비율 계산
 calculate_non_korean_ratio_vectorized(df)
@@ -99,7 +92,6 @@ filtered_df = df[
 ]
 logging.info(f"한국어가 아닌 문자 비율이 {NON_KOREAN_RATIO_LOWER_THRESHOLD} 이상 {NON_KOREAN_RATIO_UPPER_THRESHOLD} 이하인 문장을 필터링했습니다. 총 {len(filtered_df)}개의 문장이 추출되었습니다.")
 
-# 결과를 새로운 CSV 파일로 저장 (인코딩 지정)
 try:
     filtered_df.to_csv(output_path, index=False, encoding='utf-8-sig')
     logging.info(f"필터링된 데이터가 '{output_path}' 파일에 저장되었습니다.")
