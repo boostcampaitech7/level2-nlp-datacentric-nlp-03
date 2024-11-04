@@ -13,6 +13,8 @@ from transformers import (
 from huggingface_hub import login
 from deep_translator import GoogleTranslator
 from koeda import EDA  
+from sklearn.utils import shuffle
+
 
 class Augmentation:
     def __init__(self, input_data, output_dir, seed=456):
@@ -230,6 +232,31 @@ Output:
         self.data.to_csv(os.path.join(self.output_dir, 'eda_augmented.csv'), index=False)
         print("EDA 기법이 완료되었습니다. 'eda_augmented.csv'에 저장되었습니다.")
 
+    def melt_columns(self):
+        """
+        모든 증강된 열을 하나의 열로 변환하여 저장하는 함수입니다.
+        """
+        # 증강된 열 목록
+        columns_to_expand = [
+            'processed_text', 'recovered_text', 'typos_corrected_text', 
+            'back_translated_text', 'eda_sr', 'eda_ri', 'eda_rs', 'eda_rd'
+        ]
+
+        # 각 열을 별도의 행으로 확장하여 하나의 열로 변환
+        expanded_data = self.data.melt(
+            id_vars=[col for col in self.data.columns if col not in columns_to_expand],
+            value_vars=columns_to_expand,
+            var_name='augmentation_type',
+            value_name='augmented_text'
+        ).dropna(subset=['augmented_text'])  # 값이 있는 데이터만 남기기
+
+        # 데이터 셔플링 (재현성을 위해 random_state 설정)
+        expanded_data = shuffle(expanded_data, random_state=self.seed).reset_index(drop=True)
+
+        # 결과를 CSV 파일로 저장
+        expanded_data.to_csv(os.path.join(self.output_dir, 'expanded_augmented.csv'), index=False)
+        print("모든 증강된 열을 하나의 열로 변환하여 'expanded_augmented.csv'에 저장되었습니다.")
+
 
     def run_all(self, hf_token=None):
         """
@@ -238,11 +265,13 @@ Output:
         :param hf_token: Hugging Face 토큰 (노이즈 복구에 필요)
         """
         self.noise_filtering()
-        # self.noise_recovery(hf_token=hf_token)
+        self.noise_recovery(hf_token=hf_token)
         self.typos_corrector()
-        # self.back_translation()
+        self.back_translation()
         self.easy_data_augmentation()
         print("모든 증강 기법이 완료되었습니다.")
+
+        self.melt_columns()
 
 if __name__ == "__main__":
     # 입력 및 출력 파일 경로 설정
