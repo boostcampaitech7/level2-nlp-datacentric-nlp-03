@@ -142,14 +142,14 @@ if __name__ == "__main__":
 
     # 학습용 데이터 로드
     try:
-        train_df = pd.read_csv("/data/ephemeral/home/Yunseo_DCTC/data/expanded_augmented.csv")
+        train_df = pd.read_csv("/data/ephemeral/home/Yunseo_DCTC/code/last.csv")
     except FileNotFoundError:
         print("학습용 CSV 파일을 찾을 수 없습니다. 경로를 확인해주세요.")
         sys.exit(1)
 
     # 테스트용 데이터 로드
     try:
-        test_df = pd.read_csv("/data/ephemeral/home/Yunseo_DCTC/output/noise_isolated.csv")
+        test_df = pd.read_csv("/data/ephemeral/home/Yunseo_DCTC/data/train.csv")
     except FileNotFoundError:
         print("테스트용 CSV 파일을 찾을 수 없습니다. 경로를 확인해주세요.")
         sys.exit(1)
@@ -163,7 +163,7 @@ if __name__ == "__main__":
     print(test_df.head())
     
     # 학습 데이터에서 텍스트와 라벨 추출
-    train_texts = train_df['augmented_text'].tolist()
+    train_texts = train_df['text'].tolist()
     train_labels = train_df['target'].values
     
     # 테스트 데이터에서 텍스트와 라벨, 인덱스 추출
@@ -196,7 +196,7 @@ if __name__ == "__main__":
     # 최종 CSV로 저장 (ID, text, target 형식으로)
     final_data = corrected_data[['ID', 'text', 'target']].copy()
     final_data['target'] = corrected_data['corrected_target']  # 수정된 라벨로 덮어쓰기
-    final_data.to_csv("corrected_test_data.csv", index=False)
+    final_data.to_csv("corrected_train_data.csv", index=False)
 
     print("수정된 데이터가 'corrected_test_data.csv'에 저장되었습니다.")
     
