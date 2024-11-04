@@ -257,6 +257,8 @@ Output:
         expanded_data.to_csv(os.path.join(self.output_dir, 'expanded_augmented.csv'), index=False)
         print("모든 증강된 열을 하나의 열로 변환하여 'expanded_augmented.csv'에 저장되었습니다.")
 
+        return expanded_data
+
 
     def run_all(self, hf_token=None):
         """
@@ -271,7 +273,9 @@ Output:
         self.easy_data_augmentation()
         print("모든 증강 기법이 완료되었습니다.")
 
-        self.melt_columns()
+        return self.melt_columns()
+
+
 
 if __name__ == "__main__":
     # 입력 및 출력 파일 경로 설정

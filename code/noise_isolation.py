@@ -141,7 +141,7 @@ if __name__ == "__main__":
     OUTPUT_DIR = os.path.join(BASE_DIR, '../output')
 
     input_file = os.path.join(DATA_DIR, 'train.csv')
-    output_file = os.path.join(OUTPUT_DIR, 'noise_isolated.csv')
+    output_file = os.path.join(OUTPUT_DIR, 'noise_isolated_test.csv')
 
     # 클래스 인스턴스 생성
     korean_text_filter = Noise_isolation(
@@ -149,7 +149,7 @@ if __name__ == "__main__":
         output_file=output_file,
         non_korean_ratio_lower_threshold=-1,  # 필요에 따라 값 조정
         non_korean_ratio_upper_threshold=0.11   # 필요에 따라 값 조정
-    ) # threshold == 0.12
+    )
 
     # 프로세스 실행
     df = korean_text_filter.run(save=True)

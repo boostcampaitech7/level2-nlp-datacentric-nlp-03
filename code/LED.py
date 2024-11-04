@@ -213,3 +213,7 @@ if __name__ == "__main__":
     #     print(f"원본 라벨: {test_labels[idx]}")
     #     print(f"수정된 라벨: {y_corrected[idx]}")
     #     print("-" * 50)
+
+    # from cleanlab.dataset import health_summary
+    # class_names=[0,1,2,3,4,5,6]
+    # health_summary(dataset_train['target'], train_pred_probs, class_names=class_names)
