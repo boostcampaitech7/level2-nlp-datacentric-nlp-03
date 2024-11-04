@@ -279,8 +279,8 @@ if __name__ == "__main__":
     DATA_DIR = os.path.join(BASE_DIR, '../data')
     OUTPUT_DIR = os.path.join(BASE_DIR, '../output')
 
-    input_file = os.path.join(DATA_DIR, 'noise_isolated.csv')
-    output_dir = os.path.join(OUTPUT_DIR, 'augmented')
+    input_file = os.path.join(DATA_DIR, 'corrected_test_data.csv')
+    output_dir = os.path.join(OUTPUT_DIR, 'un-noised_augmented')
 
     # 클래스 인스턴스 생성
     augmentation = Augmentation(

@@ -147,9 +147,9 @@ if __name__ == "__main__":
     korean_text_filter = Noise_isolation(
         input_file=input_file,
         output_file=output_file,
-        non_korean_ratio_lower_threshold=0.1,  # 필요에 따라 값 조정
-        non_korean_ratio_upper_threshold=0.36   # 필요에 따라 값 조정
-    )
+        non_korean_ratio_lower_threshold=-1,  # 필요에 따라 값 조정
+        non_korean_ratio_upper_threshold=0.11   # 필요에 따라 값 조정
+    ) # threshold == 0.12
 
     # 프로세스 실행
     df = korean_text_filter.run(save=True)
