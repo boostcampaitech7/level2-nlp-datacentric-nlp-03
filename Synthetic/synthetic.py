@@ -1,4 +1,4 @@
-import os  # os 모듈을 추가로 임포트합니다.
+import os 
 import pandas as pd
 from transformers import LlamaTokenizerFast, AutoModelForCausalLM
 import torch
