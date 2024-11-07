@@ -14,17 +14,10 @@ from huggingface_hub import login
 from deep_translator import GoogleTranslator
 from koeda import EDA  
 from sklearn.utils import shuffle
-
+from collections import defaultdict
 
 class Augmentation:
-    def __init__(self, input_data, output_dir, seed=456):
-        """
-        Augmentation 클래스는 데이터 증강을 위한 다양한 기법을 제공합니다.
-
-        :param input_file: 입력 CSV 파일 경로 또는 DataFrame
-        :param output_dir: 출력 파일을 저장할 디렉토리 경로
-        :param seed: 재현성을 위한 랜덤 시드 값
-        """
+    def __init__(self, input_data, output_dir, seed=2024):
         self.input_data = input_data
         self.output_dir = output_dir
         self.seed = seed
@@ -51,15 +44,10 @@ class Augmentation:
         os.makedirs(self.output_dir, exist_ok=True)
 
         # koeda EDA 초기화
-        self.eda = EDA(morpheme_analyzer="Okt", alpha_sr=0.1, alpha_ri=0.1, alpha_rs=0.1, prob_rd=0.1)
+        self.eda = EDA(morpheme_analyzer="Okt", alpha_sr=0.3, alpha_ri=0.3, alpha_rs=0.3, prob_rd=0.3)
 
+    # 정규식을 사용하여 텍스트에서 한글, 숫자, 연속된 대문자(2자 이상), 한자, 그리고 띄어쓰기를 제외한 문자를 제거합니다.
     def noise_filtering(self):
-        """
-        노이즈 필터링을 수행하는 함수입니다.
-        정규식을 사용하여 텍스트에서 한글, 숫자, 연속된 대문자(2자 이상), 한자, 그리고 띄어쓰기를 제외한 문자를 제거합니다.
-        """
-        import re
-
         def clean_text(text):
             if isinstance(text, str):
                 # 허용된 패턴: 한글, 숫자, 연속된 대문자(2자 이상), 한자, 띄어쓰기
@@ -72,11 +60,34 @@ class Augmentation:
         # 'text' 열을 처리하여 필요한 문자만 남김
         self.data['processed_text'] = self.data['text'].apply(clean_text)
 
-        # 결과를 CSV 파일로 저장
-        self.data.to_csv(os.path.join(self.output_dir, 'noise_filtered.csv'), index=False)
-        print("노이즈 필터링이 완료되었습니다. 'noise_filtered.csv'에 저장되었습니다.")
+        print("노이즈 필터링이 완료되었습니다.")
 
-    def noise_recovery(self, model_name='Bllossom/llama-3.2-Korean-Bllossom-3B', hf_token=None):
+    def naive_augment(self):
+        """
+        텍스트 증강을 단순한 변형으로 수행하는 함수입니다.
+        특수문자 제거, 대소문자 변환, 공백 추가 등 다양한 방식으로 텍스트를 증강하여
+        self.data에 각 변형을 새 열로 저장합니다.
+        """
+
+        # 특수문자 제거, 대소문자 변환, 공백 추가 함수 정의
+        def remove_special_characters(text):
+            return re.sub(r'[^A-Za-z0-9가-힣 ]+', '', text)
+
+        def to_lowercase(text):
+            return text.lower()
+
+        def add_spaces(text):
+            return '  '.join(text.split())
+
+        # 증강된 텍스트를 저장할 새로운 열 추가
+        self.data['naive_original'] = self.data['text']
+        self.data['naive_no_special_chars'] = self.data['text'].apply(remove_special_characters)
+        self.data['naive_lowercase'] = self.data['text'].apply(to_lowercase)
+        self.data['naive_spaced'] = self.data['text'].apply(add_spaces)
+
+        print("Naive Augmentation이 완료되었습니다. 각 변형이 self.data에 추가되었습니다.")
+
+    def llm_recovery(self, model_name='Bllossom/llama-3.2-Korean-Bllossom-3B', hf_token=None):
         """
         노이즈 복구를 수행하는 함수입니다.
         LLM을 사용하여 노이즈가 있는 문장을 복구합니다.
@@ -167,34 +178,43 @@ Output:
         self.data.to_csv(os.path.join(self.output_dir, 'typos_corrected.csv'), index=False)
         print("맞춤법 교정이 완료되었습니다. 'typos_corrected.csv'에 저장되었습니다.")
 
-    def back_translation(self, src='ko', mid='en'):
+    def back_translation(self, src='ko', languages=None):
         """
         백번역을 수행하는 함수입니다.
-        텍스트를 중간 언어로 번역한 후 다시 원래 언어로 번역합니다.
+        텍스트를 선택한 여러 언어로 번역한 후 다시 원래 언어로 번역합니다.
 
         :param src: 원본 언어 (기본값: 한국어)
-        :param mid: 중간 언어 (기본값: 영어)
+        :param languages: 백번역을 수행할 중간 언어 목록, 기본값은 영어, 중국어, 독일어.
+                          ex) [('en', '영어'), ('zh-cn', '중국어'), ('de', '독일어')]
         """
-        def back_translate(text):
+        if languages is None:
+            languages = [('en', '영어'), ('zh-cn', '중국어'), ('de', '독일어')]
+
+        def back_translate(text, mid_lang, lang_name, record_id):
             try:
                 # 원본 텍스트를 중간 언어로 번역
-                translated = GoogleTranslator(source=src, target=mid).translate(text)
+                translated = GoogleTranslator(source=src, target=mid_lang).translate(text)
                 # 중간 언어에서 다시 원본 언어로 번역
-                back_translated = GoogleTranslator(source=mid, target=src).translate(translated)
+                back_translated = GoogleTranslator(source=mid_lang, target=src).translate(translated)
                 return back_translated
             except Exception as e:
-                print(f"번역 중 오류 발생: {text}\n에러 메시지: {e}")
+                print(f"번역 오류 (ID {record_id}, {lang_name}): {e}")
                 return text
 
         # 백번역 적용
         tqdm.pandas()
-        self.data['back_translated_text'] = self.data['processed_text'].progress_apply(
-            lambda x: back_translate(str(x))
-        )
+        for mid_lang, lang_name in languages:
+            column_name = f'back_translated_{lang_name}'
+            self.data[column_name] = self.data.apply(
+                lambda row: back_translate(str(row['processed_text']), mid_lang, lang_name, row['ID']),
+                axis=1
+            )
 
         # 결과를 CSV 파일로 저장
         self.data.to_csv(os.path.join(self.output_dir, 'back_translated.csv'), index=False)
         print("백번역이 완료되었습니다. 'back_translated.csv'에 저장되었습니다.")
+
+
 
     def easy_data_augmentation(self, num_aug=1):
         """
@@ -267,7 +287,7 @@ Output:
         :param hf_token: Hugging Face 토큰 (노이즈 복구에 필요)
         """
         self.noise_filtering()
-        self.noise_recovery(hf_token=hf_token)
+        self.llm_recovery(hf_token=hf_token)
         self.typos_corrector()
         self.back_translation()
         self.easy_data_augmentation()
@@ -294,3 +314,4 @@ if __name__ == "__main__":
 
     # 프로세스 실행
     augmentation.run_all()
+
