@@ -5,20 +5,17 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 import torch
+from huggingface_hub import login
+from deep_translator import GoogleTranslator
+from koeda import EDA  
 from transformers import (
     AutoTokenizer,
     AutoModelForCausalLM,
     AutoModelForSeq2SeqLM,
 )
-from huggingface_hub import login
-from deep_translator import GoogleTranslator
-from koeda import EDA  
-from sklearn.utils import shuffle
-from collections import defaultdict
 
 class Augmentation:
-    def __init__(self, input_data, output_dir, seed=2024):
-        self.input_data = input_data
+    def __init__(self, output_dir, seed=2024):
         self.output_dir = output_dir
         self.seed = seed
 
@@ -26,19 +23,12 @@ class Augmentation:
         random.seed(self.seed)
         np.random.seed(self.seed)
         torch.manual_seed(self.seed)
-        torch.cuda.manual_seed(self.seed)
-        torch.cuda.manual_seed_all(self.seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed(self.seed)
+            torch.cuda.manual_seed_all(self.seed)
 
         # 디바이스 설정
         self.device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
-
-        # 데이터 로드
-        if isinstance(self.input_data, str):
-            self.data = pd.read_csv(self.input_data)
-        elif isinstance(self.input_data, pd.DataFrame):
-            self.data = self.input_data.copy()
-        else:
-            raise ValueError("input_data는 파일 경로(str) 또는 DataFrame이어야 합니다.")
 
         # 출력 디렉토리 생성
         os.makedirs(self.output_dir, exist_ok=True)
@@ -46,30 +36,48 @@ class Augmentation:
         # koeda EDA 초기화
         self.eda = EDA(morpheme_analyzer="Okt", alpha_sr=0.3, alpha_ri=0.3, alpha_rs=0.3, prob_rd=0.3)
 
-    # 정규식을 사용하여 텍스트에서 한글, 숫자, 연속된 대문자(2자 이상), 한자, 그리고 띄어쓰기를 제외한 문자를 제거합니다.
-    def noise_filtering(self):
+        # 내부적으로 증강된 데이터를 저장할 데이터프레임
+        self.augmented_df = None
+        self.base_data = None  # 현재 기초 데이터
+
+    def _reset_augmented_df(self):
+        # augmented_df를 초기화합니다.
+        self.augmented_df = pd.DataFrame(columns=self.base_data.columns)
+
+    def _check_base_data(self, data):
+        # 기초 데이터가 변경되었는지 확인하고, 변경되었으면 augmented_df를 초기화합니다.
+        if self.base_data is None or not self.base_data.equals(data):
+            self.base_data = data.copy()
+            self._reset_augmented_df()
+
+    def noise_filtering(self, data):
+        """
+        'text' 열에 노이즈 필터링을 수행합니다.
+        """
+        self._check_base_data(data)
+
         def clean_text(text):
             if isinstance(text, str):
                 # 허용된 패턴: 한글, 숫자, 연속된 대문자(2자 이상), 한자, 띄어쓰기
                 pattern = r'[가-힣]+|[0-9]+|[A-Z]{2,}|[\u4E00-\u9FFF]+|\s+'
                 matches = re.findall(pattern, text)
-                cleaned_text = ''.join(matches)
+                cleaned_text = ''.join(matches).strip()
                 return cleaned_text
             return ''
 
-        # 'text' 열을 처리하여 필요한 문자만 남김
-        self.data['processed_text'] = self.data['text'].apply(clean_text)
+        augmented_data = data.copy()
+        augmented_data['text'] = augmented_data['text'].apply(clean_text)
+        self.augmented_df = pd.concat([self.augmented_df, augmented_data], ignore_index=True)
 
         print("노이즈 필터링이 완료되었습니다.")
+        return self.augmented_df
 
-    def naive_augment(self):
+    def naive_augment(self, data):
         """
-        텍스트 증강을 단순한 변형으로 수행하는 함수입니다.
-        특수문자 제거, 대소문자 변환, 공백 추가 등 다양한 방식으로 텍스트를 증강하여
-        self.data에 각 변형을 새 열로 저장합니다.
+        original + remove_special_characters + to_lowercase + add_spaces
         """
+        self._check_base_data(data)
 
-        # 특수문자 제거, 대소문자 변환, 공백 추가 함수 정의
         def remove_special_characters(text):
             return re.sub(r'[^A-Za-z0-9가-힣 ]+', '', text)
 
@@ -79,22 +87,22 @@ class Augmentation:
         def add_spaces(text):
             return '  '.join(text.split())
 
-        # 증강된 텍스트를 저장할 새로운 열 추가
-        self.data['naive_original'] = self.data['text']
-        self.data['naive_no_special_chars'] = self.data['text'].apply(remove_special_characters)
-        self.data['naive_lowercase'] = self.data['text'].apply(to_lowercase)
-        self.data['naive_spaced'] = self.data['text'].apply(add_spaces)
+        augmented_data = pd.DataFrame(data)
+        for func in [remove_special_characters, to_lowercase, add_spaces]:
+            temp_data = data.copy()
+            temp_data['text'] = temp_data['text'].apply(func)
+            augmented_data = pd.concat([augmented_data, temp_data], ignore_index=True)
 
-        print("Naive Augmentation이 완료되었습니다. 각 변형이 self.data에 추가되었습니다.")
+        self.augmented_df = pd.concat([self.augmented_df, augmented_data], ignore_index=True)
+        print("Naive 증강이 완료되었습니다.")
+        return self.augmented_df
 
-    def llm_recovery(self, model_name='Bllossom/llama-3.2-Korean-Bllossom-3B', hf_token=None):
+    def llm_recovery(self, data, model_name='Bllossom/llama-3.2-Korean-Bllossom-3B', hf_token=None):
         """
-        노이즈 복구를 수행하는 함수입니다.
-        LLM을 사용하여 노이즈가 있는 문장을 복구합니다.
-
-        :param model_name: 사용할 모델의 이름
-        :param hf_token: Hugging Face 토큰 (필요한 경우)
+        'text' 열에 LLM 복구를 수행합니다.
         """
+        self._check_base_data(data)
+
         if hf_token:
             login(hf_token)
 
@@ -103,9 +111,7 @@ class Augmentation:
         model = AutoModelForCausalLM.from_pretrained(model_name).to(self.device)
 
         def extract_corrected_text(output):
-            # 모든 "corrected_text" 항목을 찾아 리스트로 저장
             matches = re.findall(r'"corrected_text":\s*"([^"]+)"', output)
-            # 마지막 항목을 반환
             return matches[-1] if matches else None
 
         def clean_sentence(noisy_sentence):
@@ -138,25 +144,23 @@ Output:
             inputs = tokenizer(prompt, return_tensors='pt', truncation=True, max_length=512).to(self.device)
             outputs = model.generate(**inputs, max_new_tokens=64, pad_token_id=tokenizer.eos_token_id)
             corrected_sentence = tokenizer.decode(outputs[0], skip_special_tokens=True)
-            # Extract the corrected sentence only, removing additional information
             corrected_sentence = extract_corrected_text(corrected_sentence)
             return corrected_sentence
 
-        # 노이즈 복구 적용
+        augmented_data = data.copy()
         tqdm.pandas()
-        self.data['recovered_text'] = self.data['processed_text'].progress_apply(clean_sentence)
+        augmented_data['text'] = augmented_data['text'].progress_apply(clean_sentence)
+        self.augmented_df = pd.concat([self.augmented_df, augmented_data], ignore_index=True)
 
-        # 결과를 CSV 파일로 저장
-        self.data.to_csv(os.path.join(self.output_dir, 'noise_recovered.csv'), index=False)
-        print("노이즈 복구가 완료되었습니다. 'noise_recovered.csv'에 저장되었습니다.")
+        print("LLM 복구가 완료되었습니다.")
+        return self.augmented_df
 
-    def typos_corrector(self, model_name="j5ng/et5-typos-corrector"):
+    def typos_corrector(self, data, model_name="j5ng/et5-typos-corrector"):
         """
-        맞춤법 교정을 수행하는 함수입니다.
-        사전 훈련된 맞춤법 교정 모델을 사용합니다.
-
-        :param model_name: 사용할 모델의 이름
+        'text' 열에 맞춤법 교정을 수행합니다.
         """
+        self._check_base_data(data)
+
         # 모델과 토크나이저 로드
         tokenizer = AutoTokenizer.from_pretrained(model_name)
         model = AutoModelForSeq2SeqLM.from_pretrained(model_name).to(self.device)
@@ -168,132 +172,63 @@ Output:
             corrected_text = tokenizer.decode(outputs[0], skip_special_tokens=True)
             return corrected_text
 
-        # 맞춤법 교정 적용
+        augmented_data = data.copy()
         tqdm.pandas()
-        self.data['typos_corrected_text'] = self.data['processed_text'].progress_apply(
-            lambda x: correct_spelling(str(x))
-        )
+        augmented_data['text'] = augmented_data['text'].progress_apply(correct_spelling)
+        self.augmented_df = pd.concat([self.augmented_df, augmented_data], ignore_index=True)
 
-        # 결과를 CSV 파일로 저장
-        self.data.to_csv(os.path.join(self.output_dir, 'typos_corrected.csv'), index=False)
-        print("맞춤법 교정이 완료되었습니다. 'typos_corrected.csv'에 저장되었습니다.")
+        print("맞춤법 교정이 완료되었습니다.")
+        return self.augmented_df
 
-    def back_translation(self, src='ko', languages=None):
+    def back_translation(self, data, src='ko', languages=None):
         """
-        백번역을 수행하는 함수입니다.
-        텍스트를 선택한 여러 언어로 번역한 후 다시 원래 언어로 번역합니다.
-
-        :param src: 원본 언어 (기본값: 한국어)
-        :param languages: 백번역을 수행할 중간 언어 목록, 기본값은 영어, 중국어, 독일어.
-                          ex) [('en', '영어'), ('zh-cn', '중국어'), ('de', '독일어')]
+        'text' 열에 백번역을 수행합니다.
         """
+        self._check_base_data(data)
+
         if languages is None:
-            languages = [('en', '영어'), ('zh-cn', '중국어'), ('de', '독일어')]
+            languages = [('en', 'English'), ('zh-cn', 'Chinese'), ('de', 'German')]
 
-        def back_translate(text, mid_lang, lang_name, record_id):
-            try:
-                # 원본 텍스트를 중간 언어로 번역
-                translated = GoogleTranslator(source=src, target=mid_lang).translate(text)
-                # 중간 언어에서 다시 원본 언어로 번역
-                back_translated = GoogleTranslator(source=mid_lang, target=src).translate(translated)
-                return back_translated
-            except Exception as e:
-                print(f"번역 오류 (ID {record_id}, {lang_name}): {e}")
-                return text
-
-        # 백번역 적용
-        tqdm.pandas()
+        augmented_data = pd.DataFrame()
         for mid_lang, lang_name in languages:
-            column_name = f'back_translated_{lang_name}'
-            self.data[column_name] = self.data.apply(
-                lambda row: back_translate(str(row['processed_text']), mid_lang, lang_name, row['ID']),
-                axis=1
-            )
+            temp_data = data.copy()
+            tqdm.pandas(desc=f"백번역 ({lang_name})")
+            def back_translate(text):
+                try:
+                    translated = GoogleTranslator(source=src, target=mid_lang).translate(text)
+                    back_translated = GoogleTranslator(source=mid_lang, target=src).translate(translated)
+                    return back_translated
+                except Exception as e:
+                    print(f"번역 오류 ({lang_name}): {e}")
+                    return text
+            temp_data['text'] = temp_data['text'].progress_apply(back_translate)
+            augmented_data = pd.concat([augmented_data, temp_data], ignore_index=True)
 
-        # 결과를 CSV 파일로 저장
-        self.data.to_csv(os.path.join(self.output_dir, 'back_translated.csv'), index=False)
-        print("백번역이 완료되었습니다. 'back_translated.csv'에 저장되었습니다.")
+        self.augmented_df = pd.concat([self.augmented_df, augmented_data], ignore_index=True)
 
+        print("백번역이 완료되었습니다.")
+        return self.augmented_df
 
-
-    def easy_data_augmentation(self, num_aug=1):
+    def easy_data_augmentation(self, data, num_aug=1):
         """
-        EDA 기법을 koeda 라이브러리를 사용하여 적용하는 함수입니다.
-
-        :param num_aug: 각 기법별로 생성할 문장 수
+        'text' 열에 EDA 증강을 수행합니다.
         """
-        tqdm.pandas()
-        # 새로운 열을 초기화
-        self.data['eda_sr'] = ''
-        self.data['eda_ri'] = ''
-        self.data['eda_rs'] = ''
-        self.data['eda_rd'] = ''
+        self._check_base_data(data)
 
-        for idx, row in tqdm(self.data.iterrows(), total=self.data.shape[0]):
-            text = row['processed_text']
+        augmented_data = pd.DataFrame()
+        for idx, row in tqdm(data.iterrows(), total=len(data)):
+            text = row['text']
+            augmented_texts = self.eda(text, num_aug=num_aug)
+            for aug_text in augmented_texts:
+                new_row = row.copy()
+                new_row['text'] = aug_text
+                augmented_data = augmented_data.append(new_row, ignore_index=True)
 
-            # Synonym Replacement (SR)
-            sr_augmented = self.eda(text, p=(0.1, 0, 0, 0))
-            self.data.at[idx, 'eda_sr'] = sr_augmented
+        self.augmented_df = pd.concat([self.augmented_df, augmented_data], ignore_index=True)
 
-            # Random Insertion (RI)
-            ri_augmented = self.eda(text, p=(0, 0.1, 0, 0))
-            self.data.at[idx, 'eda_ri'] = ri_augmented
+        print("EDA 증강이 완료되었습니다.")
+        return self.augmented_df
 
-            # Random Swap (RS)
-            rs_augmented = self.eda(text, p=(0, 0, 0.1, 0))
-            self.data.at[idx, 'eda_rs'] = rs_augmented
-
-            # Random Deletion (RD)
-            rd_augmented = self.eda(text, p=(0, 0, 0, 0.1))
-            self.data.at[idx, 'eda_rd'] = rd_augmented
-
-        # 결과를 CSV 파일로 저장
-        self.data.to_csv(os.path.join(self.output_dir, 'eda_augmented.csv'), index=False)
-        print("EDA 기법이 완료되었습니다. 'eda_augmented.csv'에 저장되었습니다.")
-
-    def melt_columns(self):
-        """
-        모든 증강된 열을 하나의 열로 변환하여 저장하는 함수입니다.
-        """
-        # 증강된 열 목록
-        columns_to_expand = [
-            'processed_text', 'recovered_text', 'typos_corrected_text', 
-            'back_translated_text', 'eda_sr', 'eda_ri', 'eda_rs', 'eda_rd'
-        ]
-
-        # 각 열을 별도의 행으로 확장하여 하나의 열로 변환
-        expanded_data = self.data.melt(
-            id_vars=[col for col in self.data.columns if col not in columns_to_expand],
-            value_vars=columns_to_expand,
-            var_name='augmentation_type',
-            value_name='augmented_text'
-        ).dropna(subset=['augmented_text'])  # 값이 있는 데이터만 남기기
-
-        # 데이터 셔플링 (재현성을 위해 random_state 설정)
-        expanded_data = shuffle(expanded_data, random_state=self.seed).reset_index(drop=True)
-
-        # 결과를 CSV 파일로 저장
-        expanded_data.to_csv(os.path.join(self.output_dir, 'expanded_augmented.csv'), index=False)
-        print("모든 증강된 열을 하나의 열로 변환하여 'expanded_augmented.csv'에 저장되었습니다.")
-
-        return expanded_data
-
-
-    def run_all(self, hf_token=None):
-        """
-        모든 증강 기법을 순차적으로 실행하는 함수입니다.
-
-        :param hf_token: Hugging Face 토큰 (노이즈 복구에 필요)
-        """
-        self.noise_filtering()
-        self.llm_recovery(hf_token=hf_token)
-        self.typos_corrector()
-        self.back_translation()
-        self.easy_data_augmentation()
-        print("모든 증강 기법이 완료되었습니다.")
-
-        return self.melt_columns()
 
 
 
@@ -308,7 +243,6 @@ if __name__ == "__main__":
 
     # 클래스 인스턴스 생성
     augmentation = Augmentation(
-        input_data=input_file,
         output_dir=output_dir,
     )
 

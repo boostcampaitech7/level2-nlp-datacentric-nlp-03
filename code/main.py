@@ -1,8 +1,8 @@
-from noise_isolation import Noise_isolation
-from augmentation import Augmentation
-from LED import LabelErrorCorrector
 import os
 import numpy as np
+from noise_isolation import Noise_isolation
+from augmentation import Augmentation
+from relabeling import LabelErrorCorrector, TextReLabelingEnsemble
 
 # 입력 및 출력 파일 경로 설정
 BASE_DIR = os.getcwd()
@@ -10,27 +10,14 @@ DATA_DIR = os.path.join(BASE_DIR, '../data')
 OUTPUT_DIR = os.path.join(BASE_DIR, '../output')
 
 input_file = os.path.join(DATA_DIR, 'train.csv')
-noise_isolated_output_file = os.path.join(OUTPUT_DIR, 'noise_isolated.csv')
-augmentation_output_file = os.path.join(OUTPUT_DIR, 'augmented')
 
-# 클래스 인스턴스 생성
-unnoised_data = Noise_isolation(
+noise_isolator = Noise_isolation(
     input_file=input_file,
-    output_file=noise_isolated_output_file,
-    non_korean_ratio_lower_threshold=-1,
-    non_korean_ratio_upper_threshold=0.11
-)
-
-noised_data = Noise_isolation(
-    input_file=input_file,
-    output_file=noise_isolated_output_file,
-    non_korean_ratio_lower_threshold=0.1,  
-    non_korean_ratio_upper_threshold=0.36  
+    output_dir=DATA_DIR
 )
 
 # isolation 실행
-denoised_df = unnoised_data.run(save=False)
-noised_df = noised_data.run(save=False)
+noised_df, filtered_df = noise_isolator.isolate(type='soft')
 
 # 노이지 데이터 복원 및 증강 
 augmentation = Augmentation(

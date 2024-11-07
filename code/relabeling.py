@@ -63,10 +63,10 @@ class LabelErrorCorrector:
         self.label_errors = None
         self.trainer = None
 
-    def load_data(self, train_path: str, test_path: str):
+    def load_data(self, train_path_or_data: str, test_path: str):
         """학습 및 테스트 데이터를 로드합니다."""
         try:
-            self.train_df = pd.read_csv(train_path)
+            self.train_df = pd.read_csv(train_path_or_data)
             self.test_df = pd.read_csv(test_path)
         except FileNotFoundError as e:
             print(f"파일을 찾을 수 없습니다: {e}")
@@ -164,37 +164,48 @@ class LabelErrorCorrector:
         corrected_data.to_csv(output_path, index=False)
         print(f"수정된 데이터가 '{output_path}'에 저장되었습니다.")
 
-    def run_pipeline(self, train_path, test_path, output_path="corrected_train_data.csv"):
+    def run(self, train_path_or_data, test_path, output_path="corrected_train_data.csv"):
         """전체 파이프라인을 실행합니다."""
-        self.load_data(train_path, test_path)
+        self.load_data(train_path_or_data, test_path)
         self.train_model()
         self.detect_label_errors()
         self.save_corrected_data(output_path)
 
-class TextReLabelingEnsemble:
-    def __init__(self, model_names=["klue/bert-base", "klue/roberta-base", "klue/roberta-large", "klue/roberta-small"], noise_data_path=None, clean_data_path=None, max_length=128, num_labels=7, seed=456):
+class ReLabelingEnsemble:
+    def __init__(self, model_names=["klue/bert-base", "klue/roberta-base", "klue/roberta-large", "klue/roberta-small"], train_path_or_data=None, relabeling_path_or_data=None, max_length=128, num_labels=7, seed=456):
         self.model_names = model_names
-        self.noise_data_path = noise_data_path
-        self.clean_data_path = clean_data_path
+        self.train_path_or_data = train_path_or_data
+        self.relabeling_path_or_data = relabeling_path_or_data
         self.max_length = max_length
         self.num_labels = num_labels
         self.seed = seed
         self.device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
         
-        # Seed 설정
+        # 시드 설정
         torch.manual_seed(self.seed)
         torch.cuda.manual_seed(self.seed)
         torch.cuda.manual_seed_all(self.seed)
         
         # 데이터 로드
-        self.noise_data = pd.read_csv(self.noise_data_path)
-        self.clean_data = pd.read_csv(self.clean_data_path)
+        self.noise_data = self.load_data(self.train_path_or_data)
+        self.clean_data = self.load_data(self.relabeling_path_or_data)
         
         # 모델 및 토크나이저 로드
         self.models_and_tokenizers = [self.load_model_and_tokenizer(model_name) for model_name in self.model_names]
         
         # Trainer 리스트 초기화
         self.trainers = []
+
+    def load_data(self, data_source):
+        """데이터를 로드하거나 DataFrame을 반환합니다."""
+        if isinstance(data_source, str):
+            # 파일 경로인 경우
+            return pd.read_csv(data_source)
+        elif isinstance(data_source, pd.DataFrame):
+            # DataFrame인 경우
+            return data_source
+        else:
+            raise ValueError("data_source는 파일 경로(str) 또는 pandas DataFrame이어야 합니다.")
 
     def load_model_and_tokenizer(self, model_name):
         """모델과 토크나이저를 로드합니다."""
@@ -210,10 +221,12 @@ class TextReLabelingEnsemble:
 
     def prepare_datasets(self):
         """노이즈 데이터셋과 클린 데이터셋을 준비합니다."""
+        # 노이즈 데이터셋 준비
         self.train_dataset = Dataset.from_pandas(self.noise_data[['text', 'target']])
         self.train_dataset = self.train_dataset.map(lambda x: self.tokenize_function(x, self.models_and_tokenizers[0][1]), batched=True)
         self.train_dataset = self.train_dataset.rename_column("target", "labels")
 
+        # 클린 데이터셋 준비
         self.clean_dataset = Dataset.from_dict({"text": self.clean_data['text'].tolist()})
         self.clean_dataset = self.clean_dataset.map(lambda x: self.tokenize_function(x, self.models_and_tokenizers[0][1]), batched=True)
 
@@ -252,25 +265,29 @@ class TextReLabelingEnsemble:
         predicted_labels = ensemble_predictions.argmax(axis=1)
         return predicted_labels
 
-    def save_relabelled_data(self, output_path="relabeled_clean_train.csv"):
+    def relabel_data(self, output_path="relabeled_clean_train.csv"):
         """재라벨링된 데이터를 CSV 파일로 저장합니다."""
         self.clean_data['target'] = self.relabel_texts_ensemble()
         final_data = self.clean_data[['ID', 'text', 'target']]
-        final_data.to_csv(output_path, index=False)
-        print(f"재라벨링된 데이터가 '{output_path}'에 저장되었습니다.")
+
+        # final_data.to_csv(output_path, index=False)
+        # print(f"재라벨링된 데이터가 '{output_path}'에 저장되었습니다.")
+
+        return final_data
 
     def run(self):
-        """파이프라인 전체를 실행합니다."""
+        """전체 파이프라인을 실행합니다."""
         self.prepare_datasets()
         self.train_models()
-        self.save_relabelled_data()
+        self.relabel_data()
+
 
 
 # 사용 예시
 if __name__ == "__main__":
 
     lec = LabelErrorCorrector(
-        model_name='klue/roberta-base',  # 한국어 RoBERTa 모델
+        model_name='klue/roberta-base', 
         num_labels=7,  # 0~6까지 총 7개 클래스
         batch_size=16,
         epochs=3,
@@ -279,15 +296,15 @@ if __name__ == "__main__":
     )
     
     # 파이프라인 실행
-    lec.run_pipeline(
-        train_path="/data/ephemeral/home/Yunseo_DCTC/code/last.csv",
+    lec.run(
+        train_path_or_data="/data/ephemeral/home/Yunseo_DCTC/code/last.csv",
         test_path="/data/ephemeral/home/Yunseo_DCTC/data/train.csv",
         output_path="corrected_train_data.csv"
     )
 
-    relabeling_ensemble = TextReLabelingEnsemble(
-        noise_data_path="expanded_noise_train.csv",
-        clean_data_path="clean_train.csv",
+    relabeling_ensemble = ReLabelingEnsemble(
+        train_path_or_data="expanded_noise_train.csv",
+        relabeling_path_or_data="clean_train.csv",
         max_length=128,
         num_labels=7,
         seed=456

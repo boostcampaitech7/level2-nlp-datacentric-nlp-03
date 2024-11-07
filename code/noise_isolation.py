@@ -4,11 +4,11 @@ import os
 import logging
 
 class Noise_isolation:
-    def __init__(self, input_file, output_file):
+    def __init__(self, input_file, output_dir):
         logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
         self.input_file = input_file
-        self.output_file = output_file
+        self.output_dir = output_dir
 
         self.pattern = r'(?<![A-Z])[A-Z](?![A-Z])|[^ㄱ-ㅎ가-힣\u4E00-\u9FFF0-9\sA-Z\u2026·∼]'
 
@@ -72,12 +72,12 @@ class Noise_isolation:
             raise
 
     def save_data(self):
-        output_dir = os.path.dirname(self.output_file)
+        output_dir = os.path.dirname(self.output_dir)
         os.makedirs(output_dir, exist_ok=True)
 
         try:
-            self.filtered_df.to_csv(self.output_file, index=False, encoding='utf-8-sig')
-            logging.info(f"필터링된 데이터가 '{self.output_file}' 파일에 저장되었습니다.")
+            self.filtered_df.to_csv(self.output_dir, index=False, encoding='utf-8-sig')
+            logging.info(f"필터링된 데이터가 '{self.output_dir}' 파일에 저장되었습니다.")
         except Exception as e:
             logging.error(f"파일을 저장하는 중 오류가 발생했습니다: {e}")
             raise
@@ -110,8 +110,8 @@ class Noise_isolation:
             labels = ['0', '0.2', '0.3', '0.4', '0.5', '0.6', '0.7', '0.8+']
             self.df['noise_group'] = pd.cut(self.df['noise_ratio'], bins=bins, labels=labels, include_lowest=True)
 
-            self.noised_df = self.df[self.df['noise_ratio'] > 0].copy()
-            self.filtered_df = self.df[self.df['noise_ratio'] == 0].copy()
+            self.noised_df = self.df[self.df['noise_ratio'] > 0].copy()[['ID', 'text', 'target']]
+            self.filtered_df = self.df[self.df['noise_ratio'] == 0].copy()[['ID', 'text', 'target']]
 
             # self.noised_df[['ID', 'text', 'target']].to_csv("noise_train.csv", index=False)
             # self.filtered_df[['ID', 'text', 'target']].to_csv("clean_train.csv", index=False)
@@ -130,11 +130,11 @@ if __name__ == "__main__":
     OUTPUT_DIR = os.path.join(BASE_DIR, '../output')
 
     input_file = os.path.join(DATA_DIR, 'train.csv')
-    output_file = os.path.join(OUTPUT_DIR, 'noise_isolated_test.csv')
+    output_dir = os.path.join(OUTPUT_DIR, 'noise_isolated_test.csv')
 
     noise_isolator = Noise_isolation(
         input_file=input_file,
-        output_file=output_file,
+        output_dir=output_dir,
     )
 
     ndf, fdf = noise_isolator.isolate(type='hard')
