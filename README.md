@@ -17,4 +17,17 @@
 ### 랩업 리포트
 - [Wrap-up report](profile/MRC_NLP_%ED%8C%80%20%EB%A6%AC%ED%8F%AC%ED%8A%B8(03%EC%A1%B0).pdf)
 
-### 0. 설치
+### 0. train.csv 생성순서
+
+# data 디렉토리 구조
+level2-nlp-datacentric-nlp-03/data/
+|
+|-- test.csv
+|-- train.csv
+|-- original_train.csv
+|-- sample_submission.csv        
+|-- EDA.ipynb                       # 1st
+|-- noise_train_EDA.ipynb           # 2nd
+|-- relabel_clean_train.ipynb       # 3rd
+|-- relabeled_clea_train_EDA.ipynb  # 4th
+|-- make_train.ipynb                # 5th
