@@ -110,8 +110,8 @@ class Noise_isolation:
             labels = ['0', '0.2', '0.3', '0.4', '0.5', '0.6', '0.7', '0.8+']
             self.df['noise_group'] = pd.cut(self.df['noise_ratio'], bins=bins, labels=labels, include_lowest=True)
 
-            self.noised_df = self.df[self.df['noise_ratio'] > 0].copy()
-            self.filtered_df = self.df[self.df['noise_ratio'] == 0].copy()
+            self.noised_df = self.df[self.df['noise_ratio'] > 0].copy()[['ID', 'text', 'target']]
+            self.filtered_df = self.df[self.df['noise_ratio'] == 0].copy()[['ID', 'text', 'target']]
 
             # self.noised_df[['ID', 'text', 'target']].to_csv("noise_train.csv", index=False)
             # self.filtered_df[['ID', 'text', 'target']].to_csv("clean_train.csv", index=False)
