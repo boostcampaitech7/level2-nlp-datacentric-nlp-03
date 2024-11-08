@@ -21,15 +21,17 @@
 
 # data 디렉토리 구조
 ```Bash
-level2-nlp-datacentric-nlp-03/data/
-|
-|-- test.csv
-|-- train.csv
-|-- original_train.csv
-|-- sample_submission.csv        
-|-- EDA.ipynb                       # 1st
-|-- noise_train_EDA.ipynb           # 2nd
-|-- relabel_clean_train.ipynb       # 3rd
-|-- relabeled_clea_train_EDA.ipynb  # 4th
-|-- make_train.ipynb                # 5th
+level2-nlp-datacentric-nlp-03/
+├── code/
+│   ├── Synthetic/
+│   │   ├── synthetic.py
+│   │   └── output_data/
+│   ├── scripts/
+│   │   ├── augmentation.py
+│   │   ├── noise_isolation.py
+│   │   ├── relabeling.py
+│   │   ├── opt1.py
+│   │   └── opt2.py
+│   └── baseline_code.ipynb
+└── README.md
 ```
