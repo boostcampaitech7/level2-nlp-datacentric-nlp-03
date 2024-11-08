@@ -1,0 +1,11 @@
+transformers
+sentencepiece
+numpy
+pandas
+evaluate
+accelerate
+scikit-learn
+ipywidgets
+wandb
+koeda
+googletrans==3.1.0a0
