@@ -20,6 +20,7 @@
 ### 0. train.csv 생성순서
 
 # data 디렉토리 구조
+```Bash
 level2-nlp-datacentric-nlp-03/data/
 |
 |-- test.csv
@@ -31,3 +32,4 @@ level2-nlp-datacentric-nlp-03/data/
 |-- relabel_clean_train.ipynb       # 3rd
 |-- relabeled_clea_train_EDA.ipynb  # 4th
 |-- make_train.ipynb                # 5th
+```
