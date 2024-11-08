@@ -7,7 +7,7 @@ from relabeling import ReLabelingEnsemble, LabelErrorCorrector
 # 입력 및 출력 파일 경로 설정
 BASE_DIR = os.getcwd()
 DATA_DIR = os.path.join(BASE_DIR, '../data')
-input_file = os.path.join(DATA_DIR, 'small.csv')
+input_file = os.path.join(DATA_DIR, 'train.csv')
 
 noise_isolator = Noise_isolation(
     input_file=input_file,
@@ -18,8 +18,7 @@ augmentor = Augmentation(
     output_dir=DATA_DIR
 )
 
-relabeling_ensemble = LabelErrorCorrector(
-)
+relabeler = LabelErrorCorrector()
 
 # isolation 실행
 noised_df, filtered_df = noise_isolator.isolate(type='soft')
@@ -32,7 +31,7 @@ augmented_noised_df = augmentor.back_translation(filtered_noised_df, languages=[
 augmented_noised_df = augmentor.easy_data_augmentation(filtered_noised_df)
 
 # 리라벨링
-relabeled_filtered_df = relabeling_ensemble.run(
+relabeled_filtered_df = relabeler.run(
     train_path_or_data=augmented_noised_df,
     relabeling_path_or_data=filtered_df,
 )
