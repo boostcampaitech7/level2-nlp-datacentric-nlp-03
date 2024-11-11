@@ -54,7 +54,7 @@ last.csv + synthetic_data.csv(합성 데이터) => 완성
 ### 3. 참고사항
 대회의 자세한 정보는 첨부된 Wrap-Up 리포트를 참고해주세요.
 
-###r 5. 디렉토리 구조
+### 5. 디렉토리 구조
 ```Bash
 level2-nlp-datacentric-nlp-03/
 ├── code/
