@@ -15,7 +15,7 @@
 | 허윤서 |노이즈 분리 및 복구, 데이터 증강, 리라벨링, EDA, 합성데이터 생성|
 
 ### 랩업 리포트 (수정 필요)
-- [Wrap-up report](profile/MRC_NLP_%ED%8C%80%20%EB%A6%AC%ED%8F%AC%ED%8A%B8(03%EC%A1%B0).pdf)
+- [Wrap-up report](https://drive.google.com/file/d/1E4PA648vFxjWiTyIKY4bYJA_hYUraJ2g/view?usp=sharing)
 
 ### 0. 설치
 ```Bash
