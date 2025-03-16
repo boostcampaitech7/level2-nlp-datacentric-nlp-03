@@ -14,7 +14,7 @@
 | 이금상 |EDA ,cleanlab을 이용한 리라벨링, 데이터 증강|
 | 허윤서 |노이즈 분리 및 복구, 데이터 증강, 리라벨링, EDA, 합성데이터 생성|
 
-### 랩업 리포트 (수정 필요)
+### 랩업 리포트
 - [Wrap-up report](https://drive.google.com/file/d/1E4PA648vFxjWiTyIKY4bYJA_hYUraJ2g/view?usp=sharing)
 
 ### 0. 설치
